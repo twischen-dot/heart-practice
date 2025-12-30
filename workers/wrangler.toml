@@ -1,0 +1,10 @@
+name = "heart-practice-api"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic"
+ANTHROPIC_MODEL = "deepseek-chat"
+
+# 在 Cloudflare Dashboard 中设置敏感变量：
+# wrangler secret put ANTHROPIC_API_KEY
