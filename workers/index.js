@@ -97,14 +97,27 @@ async function extractScene(description, env) {
 // Chat handler
 async function handleChat(step, scene, userMessage, history, env) {
   const systemPrompt = getChatPrompt(step, scene);
-  const response = await callClaude(systemPrompt, userMessage, 1024, env);
+  const contextMessage = history
+    ? `对话历史：\n${history}\n\n用户当前发言：${userMessage}`
+    : `用户发言：${userMessage}`;
 
-  // Parse response (simplified)
+  const response = await callClaude(systemPrompt, contextMessage, 1024, env);
+
+  // Clean markdown code blocks
+  let cleaned = response.trim()
+    .replace(/^```json\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .replace(/^```\s*\n?/, '')
+    .replace(/\n?```\s*$/, '');
+
+  const parsed = JSON.parse(cleaned);
+  const completion = checkStepCompletion(step, userMessage);
+
   return {
-    coachMessage: response,
-    suggestedResponse: '',
-    passed: true,
-    nextStep: getNextStep(step)
+    ...parsed,
+    stepCompleted: completion.passed,
+    feedback: completion.passed ? '很好！可以进入下一步' : completion.reason,
+    nextStep: completion.passed && step !== 'T' ? getNextStep(step) : step
   };
 }
 
@@ -155,18 +168,85 @@ async function callClaude(systemPrompt, userMessage, maxTokens, env) {
 
 // Helper functions
 function getChatPrompt(step, scene) {
-  const prompts = {
-    'H': '你是HEART对话教练。当前步骤：Hear（倾听）。指导用户复述对方观点。',
-    'E': '你是HEART对话教练。当前步骤：Empathy（共情）。指导用户表达理解。',
-    'A': '你是HEART对话教练。当前步骤：Ask（提问）。指导用户提出开放式问题。',
-    'R': '你是HEART对话教练。当前步骤：Respond（回应）。指导用户提出解决方案。',
-    'T': '你是HEART对话教练。当前步骤：Track（追踪）。指导用户设定检查点。'
+  const stepDefs = {
+    'H': { name: '倾听', goal: '复述对方观点，确认理解' },
+    'E': { name: '共情', goal: '表达理解和同理心' },
+    'A': { name: '提问', goal: '提出开放式问题，深入了解' },
+    'R': { name: '回应', goal: '提出具体解决方案' },
+    'T': { name: '追踪', goal: '设定时间节点和检查点' }
   };
-  return prompts[step] || prompts['H'];
+
+  const stepDef = stepDefs[step] || stepDefs['H'];
+
+  return `你是一个HEART对话演练系统，同时扮演两个角色：
+
+1. **对方角色**：根据场景扮演对话中的另一方
+   - 场景：${scene.summary}
+   - 角色关系：${scene.roles}
+   - 问题类型：${scene.problem}
+
+2. **教练角色**：为用户提供指导
+
+当前步骤：${step} - ${stepDef.name}
+步骤目标：${stepDef.goal}
+
+输出格式（必须是有效的JSON）：
+{
+  "roleReply": "对方的回复（自然对话，30-50字）",
+  "coachTips": ["教练提示1", "教练提示2"],
+  "suggestions": ["可点用话术1", "可点用话术2", "可点用话术3"]
+}
+
+要求：
+- roleReply要符合对方的角色和情绪
+- coachTips要针对当前步骤给出具体建议
+- suggestions要提供可直接使用的话术示例
+
+只返回JSON，不要其他内容。`;
 }
 
 function getNextStep(currentStep) {
   const steps = ['H', 'E', 'A', 'R', 'T'];
   const index = steps.indexOf(currentStep);
   return index < steps.length - 1 ? steps[index + 1] : null;
+}
+
+function checkStepCompletion(step, userMessage) {
+  const rules = {
+    'H': {
+      keywords: ['听到', '了解', '你说的是', '你的意思是', '我理解你说'],
+      minLength: 20
+    },
+    'E': {
+      keywords: ['理解', '感受', '能想象', '可以理解', '换位思考'],
+      minLength: 15
+    },
+    'A': {
+      keywords: ['?', '吗', '呢', '如何', '怎么', '为什么'],
+      minLength: 10
+    },
+    'R': {
+      keywords: ['建议', '可以', '我们', '方案', '计划', '行动'],
+      minLength: 20
+    },
+    'T': {
+      keywords: ['时间', '截止', '检查', '跟进', '确认', '下次'],
+      minLength: 15
+    }
+  };
+
+  const rule = rules[step];
+  if (!rule) return { passed: false, reason: '无效的步骤' };
+
+  const hasKeyword = rule.keywords.some(kw => userMessage.includes(kw));
+  const meetsLength = userMessage.length >= rule.minLength;
+
+  if (!hasKeyword) {
+    return { passed: false, reason: `需要包含关键词：${rule.keywords.join('、')}` };
+  }
+  if (!meetsLength) {
+    return { passed: false, reason: `回复至少需要${rule.minLength}字` };
+  }
+
+  return { passed: true, reason: '' };
 }
