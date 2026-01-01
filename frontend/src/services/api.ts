@@ -38,5 +38,18 @@ export const generateReview = async (
     scene,
     conversation,
   });
-  return response.data;
+
+  const data = response.data;
+
+  // Transform old format to new format if needed
+  if ('stepScores' in data || 'strengths' in data || 'summary' in data) {
+    return {
+      scores: data.stepScores || data.scores || {},
+      highlights: data.strengths || data.highlights || [],
+      improvements: data.improvements || [],
+      actionPlan: data.summary || data.actionPlan || '',
+    };
+  }
+
+  return data;
 };
