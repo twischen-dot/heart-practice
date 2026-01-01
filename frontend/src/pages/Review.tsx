@@ -7,10 +7,18 @@ import html2canvas from 'html2canvas';
 export const Review: React.FC = () => {
   const { scene, messages, review, setReview, reset } = useStore();
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
   const navigate = useNavigate();
   const reviewRef = useRef<HTMLDivElement>(null);
 
+  // Wait for Zustand persist hydration
   useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
     if (!scene || messages.length === 0) {
       navigate('/');
       return;
@@ -32,7 +40,7 @@ export const Review: React.FC = () => {
     } else {
       setLoading(false);
     }
-  }, [scene, messages, review, setReview, navigate]);
+  }, [hydrated, scene, messages, review, setReview, navigate]);
 
   const handleExport = async () => {
     if (!reviewRef.current) return;
