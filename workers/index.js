@@ -130,11 +130,10 @@ async function generateReview(scene, conversation, env) {
 
 返回JSON格式：
 {
-  "overallScore": 85,
-  "stepScores": {"H": 90, "E": 85, "A": 80, "R": 85, "T": 80},
-  "strengths": ["优点1", "优点2"],
+  "scores": {"H": 90, "E": 85, "A": 80, "R": 85, "T": 80},
+  "highlights": ["亮点1", "亮点2"],
   "improvements": ["改进1", "改进2"],
-  "summary": "总结"
+  "actionPlan": "具体的行动计划总结"
 }`;
 
   const response = await callClaude(prompt, '', 2048, env);
